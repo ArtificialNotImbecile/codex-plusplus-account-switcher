@@ -140,8 +140,7 @@ function isUsageRemainingItem(element) {
   ].join(" ");
   return (
     /\busage remaining\b/i.test(label) ||
-    /\brate limits remaining\b/i.test(label) ||
-    /\brate limits\b/i.test(label)
+    /\brate limits remaining\b/i.test(label)
   );
 }
 

@@ -1540,7 +1540,7 @@ var require_ui_popup = __commonJS({
         element.getAttribute("aria-label") || "",
         element.getAttribute("title") || ""
       ].join(" ");
-      return /\busage remaining\b/i.test(label) || /\brate limits remaining\b/i.test(label) || /\brate limits\b/i.test(label);
+      return /\busage remaining\b/i.test(label) || /\brate limits remaining\b/i.test(label);
     }
     function isMenuItemLike(element) {
       return element instanceof HTMLElement && element.matches('button, a, [role="button"], [role="menuitem"], [data-radix-collection-item]');
@@ -1788,7 +1788,7 @@ var require_renderer = __commonJS({
         element.getAttribute("aria-label") || "",
         element.getAttribute("title") || ""
       ].join(" ");
-      return /\busage remaining\b/i.test(label) || /\brate limits remaining\b/i.test(label) || /\brate limits\b/i.test(label);
+      return /\busage remaining\b/i.test(label) || /\brate limits remaining\b/i.test(label);
     }
     function isMenuItemLike(element) {
       return element instanceof HTMLElement && element.matches('button, a, [role="button"], [role="menuitem"], [data-radix-collection-item]');
