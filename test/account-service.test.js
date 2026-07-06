@@ -197,14 +197,10 @@ test("switch syncs API account base URL into Codex config", async () => {
     const apiResult = await service.handle({ action: "switch", name: "api" });
 
     assert.equal(apiResult.ok, true);
-    assert.match(
-      await fs.readFile(path.join(codexDir, "config.toml"), "utf8"),
-      /^openai_base_url = "https:\/\/example\.com\/v1"$/m,
-    );
-    assert.match(
-      await fs.readFile(path.join(codexDir, "config.toml"), "utf8"),
-      /^model_provider = "azure"$/m,
-    );
+    const apiConfig = await fs.readFile(path.join(codexDir, "config.toml"), "utf8");
+    assert.match(apiConfig, /^openai_base_url = "https:\/\/example\.com\/v1"$/m);
+    assert.match(apiConfig, /^model_provider = "azure"$/m);
+    assert.doesNotMatch(apiConfig, /^# model_provider\s*=/m);
 
     const chatgptResult = await service.handle({ action: "switch", name: "chatgpt" });
     assert.equal(chatgptResult.ok, true);
@@ -235,10 +231,35 @@ test("switch restores a commented model provider for API accounts", async () => 
     const result = await service.handle({ action: "switch", name: "api" });
 
     assert.equal(result.ok, true);
-    assert.match(
-      await fs.readFile(path.join(codexDir, "config.toml"), "utf8"),
-      /^model_provider = "azure"$/m,
+    const config = await fs.readFile(path.join(codexDir, "config.toml"), "utf8");
+    assert.match(config, /^model_provider = "azure"$/m);
+    assert.doesNotMatch(config, /^# model_provider\s*=/m);
+  });
+});
+
+test("switch does not carry active model provider to API account without one", async () => {
+  await withTempHome(async (home) => {
+    const codexDir = path.join(home, ".codex");
+    const accountsDir = path.join(codexDir, "auth_accounts");
+    await fs.mkdir(accountsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(accountsDir, "api.json"),
+      `${JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "sk-test" }, null, 2)}\n`,
     );
+    await fs.writeFile(path.join(codexDir, "auth.json"), authWithEmail("me@example.com"));
+    await fs.writeFile(
+      path.join(codexDir, "config.toml"),
+      'model_provider = "azure"\nmodel = "gpt-5.5"\n',
+    );
+
+    const { createAccountService } = require("../src/account/service");
+    const service = createAccountService({ log: { info() {}, warn() {} } });
+    const result = await service.handle({ action: "switch", name: "api" });
+
+    assert.equal(result.ok, true);
+    const config = await fs.readFile(path.join(codexDir, "config.toml"), "utf8");
+    assert.doesNotMatch(config, /^model_provider\s*=/m);
+    assert.match(config, /^# model_provider = "azure"$/m);
   });
 });
 

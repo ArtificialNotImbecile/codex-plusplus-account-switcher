@@ -657,7 +657,7 @@ var require_config = __commonJS({
       const baseUrl = accountOpenAIBaseUrl(auth);
       if (baseUrl) await setTopLevelOpenAIBaseUrl(baseUrl);
       const modelProvider = accountModelProvider(auth) || await readCurrentModelProviderFallback();
-      if (modelProvider) await setTopLevelModelProvider(modelProvider);
+      await setTopLevelModelProvider(modelProvider);
     }
     function isApiKeyAuth(auth) {
       return auth?.auth_mode === "apikey" || !!auth?.OPENAI_API_KEY;
@@ -687,7 +687,7 @@ var require_config = __commonJS({
       return trimmed ? trimmed : null;
     }
     async function readCurrentModelProviderFallback() {
-      return readCurrentTopLevelTomlString("model_provider", { includeCommented: true });
+      return readCurrentTopLevelTomlString("model_provider", { commentedOnly: true });
     }
     async function readCurrentTopLevelTomlString(key, options = {}) {
       const { fsp } = nodeDeps2();
@@ -700,34 +700,25 @@ var require_config = __commonJS({
       }
     }
     async function setTopLevelOpenAIBaseUrl(baseUrl) {
-      const { fsp } = nodeDeps2();
-      const { CODEX_DIR, CONFIG_PATH } = codexAuthPaths2();
-      await ensureDir2(CODEX_DIR);
-      let current = "";
-      try {
-        current = await fsp.readFile(CONFIG_PATH, "utf8");
-      } catch (error) {
-        if (error?.code !== "ENOENT") throw error;
-      }
-      const next = updateTopLevelTomlString(current, "openai_base_url", baseUrl);
-      if (next !== current) {
-        await fsp.writeFile(CONFIG_PATH, next, "utf8");
-      }
+      await writeTopLevelTomlString("openai_base_url", baseUrl);
     }
     async function setTopLevelModelProvider(modelProvider) {
-      const { fsp } = nodeDeps2();
-      const { CODEX_DIR, CONFIG_PATH } = codexAuthPaths2();
-      await ensureDir2(CODEX_DIR);
-      let current = "";
-      try {
-        current = await fsp.readFile(CONFIG_PATH, "utf8");
-      } catch (error) {
-        if (error?.code !== "ENOENT") throw error;
-      }
-      const next = updateTopLevelTomlString(current, "model_provider", modelProvider, {
+      await writeTopLevelTomlString("model_provider", modelProvider, {
         commentWhenRemoving: true,
         replaceCommentedWhenSetting: true
       });
+    }
+    async function writeTopLevelTomlString(key, value, options = {}) {
+      const { fsp } = nodeDeps2();
+      const { CODEX_DIR, CONFIG_PATH } = codexAuthPaths2();
+      await ensureDir2(CODEX_DIR);
+      let current = "";
+      try {
+        current = await fsp.readFile(CONFIG_PATH, "utf8");
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+      const next = updateTopLevelTomlString(current, key, value, options);
       if (next !== current) {
         await fsp.writeFile(CONFIG_PATH, next, "utf8");
       }
@@ -776,12 +767,13 @@ var require_config = __commonJS({
     function readTopLevelTomlString(raw, key, options = {}) {
       const activePattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*(['"])(.*)\\1\\s*(?:#.*)?$`);
       const commentedPattern = new RegExp(`^\\s*#\\s*${escapeRegExp(key)}\\s*=\\s*(['"])(.*)\\1\\s*(?:#.*)?$`);
+      const includeCommented = options.includeCommented || options.commentedOnly;
       let commentedValue = null;
       for (const line of raw.replace(/\r\n/g, "\n").split("\n")) {
         if (/^\s*\[/.test(line)) return commentedValue;
         const activeMatch = line.match(activePattern);
-        if (activeMatch) return activeMatch[2].trim() || null;
-        if (options.includeCommented && commentedValue === null) {
+        if (activeMatch && !options.commentedOnly) return activeMatch[2].trim() || null;
+        if (includeCommented && commentedValue === null) {
           const commentedMatch = line.match(commentedPattern);
           if (commentedMatch) commentedValue = commentedMatch[2].trim() || null;
         }
