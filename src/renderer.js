@@ -95,8 +95,7 @@ function findAccountMenuByRateLimits() {
         : menu;
     }
   }
-  const parent = usageRemaining.parentElement;
-  return parent instanceof HTMLElement && isVisible(parent) ? parent : null;
+  return null;
 }
 
 function findUsageRemainingItem(root = document) {
@@ -115,19 +114,42 @@ function findUsageRemainingItem(root = document) {
     isVisible(selectorMatch) &&
     !selectorMatch.closest("[data-codexpp-account-switcher]")
   ) {
-    const item = selectorMatch.closest('button, a, [role="button"], [role="menuitem"]');
-    return item instanceof HTMLElement && isVisible(item) ? item : selectorMatch;
+    const item = selectorMatch.closest(
+      'button, a, [role="button"], [role="menuitem"], [data-radix-collection-item]',
+    );
+    if (isUsageRemainingItem(item)) return item;
+    if (isUsageRemainingItem(selectorMatch)) return selectorMatch;
   }
 
-  const candidates = root.querySelectorAll('button, a, [role="button"], [role="menuitem"]');
+  const candidates = root.querySelectorAll(
+    'button, a, [role="button"], [role="menuitem"], [data-radix-collection-item]',
+  );
   for (const element of candidates) {
-    if (!(element instanceof HTMLElement) || !isVisible(element)) continue;
-    if (element.closest("[data-codexpp-account-switcher]")) continue;
-    const text = compactText(element).toLowerCase();
-    if (!/\busage remaining\b/.test(text) && !/\brate limits remaining\b/.test(text)) continue;
-    return element;
+    if (isUsageRemainingItem(element)) return element;
   }
   return null;
+}
+
+function isUsageRemainingItem(element) {
+  if (!isMenuItemLike(element) || !isVisible(element)) return false;
+  if (element.closest("[data-codexpp-account-switcher]")) return false;
+  const label = [
+    compactText(element),
+    element.getAttribute("aria-label") || "",
+    element.getAttribute("title") || "",
+  ].join(" ");
+  return (
+    /\busage remaining\b/i.test(label) ||
+    /\brate limits remaining\b/i.test(label) ||
+    /\brate limits\b/i.test(label)
+  );
+}
+
+function isMenuItemLike(element) {
+  return (
+    element instanceof HTMLElement &&
+    element.matches('button, a, [role="button"], [role="menuitem"], [data-radix-collection-item]')
+  );
 }
 
 function hasUsageRemainingItem(root) {
@@ -137,9 +159,9 @@ function hasUsageRemainingItem(root) {
 function findSidebarAccountMenuByItems() {
   const items = Array.from(
     document.querySelectorAll('button, a, [role="menuitem"], [data-radix-collection-item]'),
-  ).filter((element) => element instanceof HTMLElement && isVisible(element));
-  const settings = items.find((element) => /\bsettings\b/i.test(compactText(element)));
-  const logout = items.find((element) => /\blog out\b/i.test(compactText(element)));
+  ).filter((element) => isMenuItemLike(element) && isVisible(element));
+  const settings = items.find((element) => isMenuCommandItem(element, /\bsettings\b/i));
+  const logout = items.find((element) => isMenuCommandItem(element, /\blog out\b/i));
   if (!settings || !logout) return null;
 
   let node = settings.parentElement;
@@ -153,6 +175,17 @@ function findSidebarAccountMenuByItems() {
     node = node.parentElement;
   }
   return null;
+}
+
+function isMenuCommandItem(element, pattern) {
+  if (!isMenuItemLike(element) || !isVisible(element)) return false;
+  if (element.closest("[data-codexpp-account-switcher]")) return false;
+  const label = [
+    compactText(element),
+    element.getAttribute("aria-label") || "",
+    element.getAttribute("title") || "",
+  ].join(" ");
+  return label.length <= 120 && pattern.test(label);
 }
 
 function installAccountSwitcher(state, menu) {

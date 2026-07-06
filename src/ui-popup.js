@@ -209,19 +209,39 @@ function findUsageRemainingItem(root) {
     isVisible(selectorMatch) &&
     !selectorMatch.closest("[data-codexpp-account-switcher]")
   ) {
-    const item = selectorMatch.closest('button, a, [role="button"], [role="menuitem"]');
-    return item instanceof HTMLElement && isVisible(item) ? item : selectorMatch;
+    const item = selectorMatch.closest(
+      'button, a, [role="button"], [role="menuitem"], [data-radix-collection-item]',
+    );
+    if (isUsageRemainingItem(item)) return item;
+    if (isUsageRemainingItem(selectorMatch)) return selectorMatch;
   }
 
-  return Array.from(root.querySelectorAll('button, a, [role="button"], [role="menuitem"]')).find(
-    (element) => {
-      return (
-        element instanceof HTMLElement &&
-        isVisible(element) &&
-        !element.closest("[data-codexpp-account-switcher]") &&
-        /\busage remaining\b/i.test(compactText(element))
-      );
-    },
+  return Array.from(
+    root.querySelectorAll(
+      'button, a, [role="button"], [role="menuitem"], [data-radix-collection-item]',
+    ),
+  ).find((element) => isUsageRemainingItem(element));
+}
+
+function isUsageRemainingItem(element) {
+  if (!isMenuItemLike(element) || !isVisible(element)) return false;
+  if (element.closest("[data-codexpp-account-switcher]")) return false;
+  const label = [
+    compactText(element),
+    element.getAttribute("aria-label") || "",
+    element.getAttribute("title") || "",
+  ].join(" ");
+  return (
+    /\busage remaining\b/i.test(label) ||
+    /\brate limits remaining\b/i.test(label) ||
+    /\brate limits\b/i.test(label)
+  );
+}
+
+function isMenuItemLike(element) {
+  return (
+    element instanceof HTMLElement &&
+    element.matches('button, a, [role="button"], [role="menuitem"], [data-radix-collection-item]')
   );
 }
 
