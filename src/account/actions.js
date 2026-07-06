@@ -13,8 +13,7 @@ const { fetchActiveUsageSnapshot, writeAccountUsage } = require("./usage");
 const {
   readAuthJson,
   saveAuthSnapshotWithCurrentBaseUrl,
-  setTopLevelOpenAIBaseUrl,
-  syncOpenAIBaseUrlForAccount,
+  syncCodexConfigForAccount,
 } = require("./config");
 
 async function saveCurrentAccount(rawName) {
@@ -39,10 +38,10 @@ async function switchAccount(rawName, api) {
   await ensureDir(CODEX_DIR);
   try {
     const account = await readAuthJson(source, `Saved account ${name}`);
-    await syncOpenAIBaseUrlForAccount(account);
+    await syncCodexConfigForAccount(account);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    api?.log?.warn?.(`[account-switcher] skipped base URL sync for ${name}: ${message}`);
+    api?.log?.warn?.(`[account-switcher] skipped config sync for ${name}: ${message}`);
   }
   await fsp.copyFile(source, AUTH_PATH);
   await fsp.writeFile(CURRENT_NAME_PATH, `${name}\n`, "utf8");
@@ -75,7 +74,7 @@ async function clearActiveAuth(api) {
   const { fsp, path } = nodeDeps();
   const { CODEX_DIR, AUTH_PATH, CURRENT_NAME_PATH } = codexAuthPaths();
   await ensureDir(CODEX_DIR);
-  await setTopLevelOpenAIBaseUrl(null);
+  await syncCodexConfigForAccount(null);
   if (await pathExists(AUTH_PATH)) {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     await fsp.copyFile(AUTH_PATH, path.join(CODEX_DIR, `auth.account-switcher-backup-${stamp}.json`));

@@ -180,6 +180,7 @@ test("switch syncs API account base URL into Codex config", async () => {
           auth_mode: "apikey",
           OPENAI_API_KEY: "sk-test",
           base_url: "https://example.com/v1",
+          model_provider: "azure",
         },
         null,
         2,
@@ -188,7 +189,7 @@ test("switch syncs API account base URL into Codex config", async () => {
     await fs.writeFile(path.join(codexDir, "auth.json"), authWithEmail("me@example.com"));
     await fs.writeFile(
       path.join(codexDir, "config.toml"),
-      'model = "gpt-5.5"\n\n[projects.test]\ntrust_level = "trusted"\n',
+      '# model_provider = "azure"\nmodel = "gpt-5.5"\n\n[projects.test]\ntrust_level = "trusted"\n',
     );
 
     const { createAccountService } = require("../src/account/service");
@@ -200,12 +201,43 @@ test("switch syncs API account base URL into Codex config", async () => {
       await fs.readFile(path.join(codexDir, "config.toml"), "utf8"),
       /^openai_base_url = "https:\/\/example\.com\/v1"$/m,
     );
+    assert.match(
+      await fs.readFile(path.join(codexDir, "config.toml"), "utf8"),
+      /^model_provider = "azure"$/m,
+    );
 
     const chatgptResult = await service.handle({ action: "switch", name: "chatgpt" });
     assert.equal(chatgptResult.ok, true);
-    assert.doesNotMatch(
+    const chatgptConfig = await fs.readFile(path.join(codexDir, "config.toml"), "utf8");
+    assert.doesNotMatch(chatgptConfig, /^openai_base_url\s*=/m);
+    assert.doesNotMatch(chatgptConfig, /^model_provider\s*=/m);
+    assert.match(chatgptConfig, /^# model_provider = "azure"$/m);
+  });
+});
+
+test("switch restores a commented model provider for API accounts", async () => {
+  await withTempHome(async (home) => {
+    const codexDir = path.join(home, ".codex");
+    const accountsDir = path.join(codexDir, "auth_accounts");
+    await fs.mkdir(accountsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(accountsDir, "api.json"),
+      `${JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "sk-test" }, null, 2)}\n`,
+    );
+    await fs.writeFile(path.join(codexDir, "auth.json"), authWithEmail("me@example.com"));
+    await fs.writeFile(
+      path.join(codexDir, "config.toml"),
+      '# model_provider = "azure"\nmodel = "gpt-5.5"\n',
+    );
+
+    const { createAccountService } = require("../src/account/service");
+    const service = createAccountService({ log: { info() {}, warn() {} } });
+    const result = await service.handle({ action: "switch", name: "api" });
+
+    assert.equal(result.ok, true);
+    assert.match(
       await fs.readFile(path.join(codexDir, "config.toml"), "utf8"),
-      /^openai_base_url\s*=/m,
+      /^model_provider = "azure"$/m,
     );
   });
 });
@@ -232,7 +264,7 @@ test("switch leaves config unchanged for API account without base URL", async ()
   });
 });
 
-test("switch still copies account when base URL sync cannot parse JSON", async () => {
+test("switch still copies account when config sync cannot parse JSON", async () => {
   await withTempHome(async (home) => {
     const codexDir = path.join(home, ".codex");
     const accountsDir = path.join(codexDir, "auth_accounts");
@@ -250,7 +282,7 @@ test("switch still copies account when base URL sync cannot parse JSON", async (
     assert.equal(result.ok, true);
     assert.equal(await fs.readFile(path.join(codexDir, "auth.json"), "utf8"), "{not valid json");
     assert.equal((await fs.readFile(path.join(codexDir, "current_account"), "utf8")).trim(), "broken");
-    assert.match(warnings[0], /skipped base URL sync/);
+    assert.match(warnings[0], /skipped config sync/);
   });
 });
 
@@ -261,7 +293,7 @@ test("clear-active removes configured base URL", async () => {
     await fs.writeFile(path.join(codexDir, "auth.json"), authWithEmail("me@example.com"));
     await fs.writeFile(
       path.join(codexDir, "config.toml"),
-      'openai_base_url = "https://example.com/v1"\nmodel = "gpt-5.5"\n',
+      'openai_base_url = "https://example.com/v1"\nmodel_provider = "azure"\nmodel = "gpt-5.5"\n',
     );
 
     const { createAccountService } = require("../src/account/service");
@@ -269,10 +301,34 @@ test("clear-active removes configured base URL", async () => {
     const result = await service.handle({ action: "clear-active" });
 
     assert.equal(result.ok, true);
-    assert.doesNotMatch(
-      await fs.readFile(path.join(codexDir, "config.toml"), "utf8"),
-      /^openai_base_url\s*=/m,
+    const config = await fs.readFile(path.join(codexDir, "config.toml"), "utf8");
+    assert.doesNotMatch(config, /^openai_base_url\s*=/m);
+    assert.doesNotMatch(config, /^model_provider\s*=/m);
+    assert.match(config, /^# model_provider = "azure"$/m);
+  });
+});
+
+test("save stores current API config metadata", async () => {
+  await withTempHome(async (home) => {
+    const codexDir = path.join(home, ".codex");
+    await fs.mkdir(codexDir, { recursive: true });
+    await fs.writeFile(
+      path.join(codexDir, "auth.json"),
+      `${JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "sk-test" }, null, 2)}\n`,
     );
+    await fs.writeFile(
+      path.join(codexDir, "config.toml"),
+      'openai_base_url = "https://example.com/v1"\nmodel_provider = "azure"\nmodel = "gpt-5.5"\n',
+    );
+
+    const { createAccountService } = require("../src/account/service");
+    const service = createAccountService({ log: { info() {}, warn() {} } });
+    const result = await service.handle({ action: "save", name: "api" });
+
+    assert.equal(result.ok, true);
+    const saved = JSON.parse(await fs.readFile(path.join(codexDir, "auth_accounts", "api.json"), "utf8"));
+    assert.equal(saved.base_url, "https://example.com/v1");
+    assert.equal(saved.model_provider, "azure");
   });
 });
 
